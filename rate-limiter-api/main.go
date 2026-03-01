@@ -19,73 +19,75 @@ var rdb = redis.NewClient(&redis.Options{
 	Addr: "localhost:6379",
 })
 
-// Old test handler (kept for reference - basic health check)
+// -------------------------------------------------------------------
+// MIDDLEWARE: RATE LIMITING LOGIC USING REDIS
+// This runs BEFORE actual API handler
+// -------------------------------------------------------------------
+func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
+
+	// Return a new handler function
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Step 1: Read API key from request header
+		apiKey := r.Header.Get("x-api-key")
+
+		if apiKey == "" {
+			http.Error(w, "API key missing", http.StatusBadRequest)
+			return
+		}
+
+		// Step 2: Create Redis key
+		key := "rate_limit:" + apiKey
+
+		// Step 3: Increment request count in Redis
+		count, err := rdb.Incr(ctx, key).Result()
+		if err != nil {
+			http.Error(w, "Redis error", http.StatusInternalServerError)
+			return
+		}
+
+		// Step 4: Set TTL for 60 seconds on first request
+		if count == 1 {
+			rdb.Expire(ctx, key, 60*time.Second)
+		}
+
+		// Step 5: Block if more than 5 requests
+		if count > 5 {
+			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
+			return
+		}
+
+		// Step 6: Allow request to reach actual handler
+		next(w, r)
+	}
+}
+
+// -------------------------------------------------------------------
+// OLD HANDLER (kept for reference)
 // func testHandler(w http.ResponseWriter, r *http.Request) {
 // 	fmt.Fprintf(w, "API is working")
 // }
+// -------------------------------------------------------------------
 
+// -------------------------------------------------------------------
+// ACTUAL API HANDLER (NO RATE LIMIT LOGIC HERE)
+// Only business logic should be here
+// -------------------------------------------------------------------
 func testHandler(w http.ResponseWriter, r *http.Request) {
 
-	// Read API key from incoming request header
-	apiKey := r.Header.Get("x-api-key")
-
-	// If API key not provided, block request
-	if apiKey == "" {
-		http.Error(w, "API key missing", http.StatusBadRequest)
-		return
-	}
-	// OLD LOGIC (only printing API key - before rate limiting was added)
-	// fmt.Fprintf(w, "Your API key is: %s", apiKey)
-	// -------------------------------------------------------------------
-	// NEW LOGIC: RATE LIMITING USING REDIS
-	// -------------------------------------------------------------------
-	// Create a Redis key for this user
-	// Example:
-	// API key = user123
-	// Redis key becomes = rate_limit:user123
-	key := "rate_limit:" + apiKey
-
-	// Increment request count in Redis
-	// INCR operation:
-	// If key doesn't exist → creates key with value 1
-	// If key exists → increments value by 1
-	count, err := rdb.Incr(ctx, key).Result()
-
-	// If Redis operation fails
-	if err != nil {
-		http.Error(w, "Redis error", http.StatusInternalServerError)
-		return
-	}
-
-	// If this is the first request from this user
-	// set TTL = 60 seconds
-	if count == 1 {
-
-		// OLD WAY (manual nanoseconds - hard to read)
-		// rdb.Expire(ctx, key, 60*1000000000)
-		// BETTER WAY using time package
-		rdb.Expire(ctx, key, 60*time.Second)
-	}
-
-	// If more than 5 requests in 60 seconds → block
-	if count > 5 {
-		http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
-		return
-	}
-
-	// Allow request if under limit
-	fmt.Fprintf(w, "Allowed. Request count: %d", count)
+	// Just confirm request passed middleware
+	fmt.Fprintf(w, "Request allowed by rate limiter")
 }
 
 func main() {
 
-	// Map /test endpoint to testHandler function
-	http.HandleFunc("/test", testHandler)
+	// Attach middleware BEFORE handler
+	http.HandleFunc("/test", rateLimitMiddleware(testHandler))
 
 	// Old way (no error handling)
 	// http.ListenAndServe(":8080", nil)
 
-	// Start server with error handling
+	// Start server
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		fmt.Println("Server failed:", err)
