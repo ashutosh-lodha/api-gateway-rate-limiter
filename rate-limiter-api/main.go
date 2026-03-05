@@ -19,6 +19,16 @@ var rdb = redis.NewClient(&redis.Options{
 	Addr: "localhost:6379",
 })
 
+// Rate limit configuration
+// Maximum requests allowed per time window
+var requestLimit int64 = 5
+
+// Simple user plan configuration - In real systems this would come from database
+var userPlans = map[string]int64{
+	"user123": 5,
+	"proUser": 20,
+}
+
 // -------------------------------------------------------------------
 // MIDDLEWARE: RATE LIMITING LOGIC USING REDIS
 // This runs BEFORE actual API handler
@@ -30,6 +40,13 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		// Step 1: Read API key from request header
 		apiKey := r.Header.Get("x-api-key")
+
+		// determine request limit for this user
+		limit, exists := userPlans[apiKey]
+
+		if !exists {
+			limit = requestLimit // fallback to default
+		}
 
 		if apiKey == "" {
 			http.Error(w, "API key missing", http.StatusBadRequest)
@@ -52,7 +69,7 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Step 5: Block if more than 5 requests
-		if count > 5 {
+		if count > limit {
 			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
