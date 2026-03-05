@@ -79,10 +79,16 @@ func testHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Request allowed by rate limiter")
 }
 
+// Second API endpoint used to demonstrate middleware protecting multiple routes
+func ordersHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Orders endpoint accessed")
+}
+
 func main() {
 
 	// Attach middleware BEFORE handler
 	http.HandleFunc("/test", rateLimitMiddleware(testHandler))
+	http.HandleFunc("/orders", rateLimitMiddleware(ordersHandler))
 
 	// Old way (no error handling)
 	// http.ListenAndServe(":8080", nil)
