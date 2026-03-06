@@ -23,6 +23,12 @@ var rdb = redis.NewClient(&redis.Options{
 // Maximum requests allowed per time window
 var requestLimit int64 = 5
 
+// Endpoint-specific rate limits - Some APIs require stricter control (e.g. login)
+var endpointLimits = map[string]int64{
+	"/login":  3,
+	"/orders": 10,
+}
+
 // Simple user plan configuration - In real systems this would come from database
 var userPlans = map[string]int64{
 	"user123": 5,
@@ -30,51 +36,70 @@ var userPlans = map[string]int64{
 }
 
 // -------------------------------------------------------------------
-// MIDDLEWARE: RATE LIMITING LOGIC USING REDIS
-// This runs BEFORE actual API handler
+// MIDDLEWARE: RATE LIMITING LOGIC USING REDIS - This runs BEFORE actual API handler
 // -------------------------------------------------------------------
 func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
-	// Return a new handler function
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Step 1: Read API key from request header
 		apiKey := r.Header.Get("x-api-key")
-
-		// determine request limit for this user
-		limit, exists := userPlans[apiKey]
-
-		if !exists {
-			limit = requestLimit // fallback to default
-		}
 
 		if apiKey == "" {
 			http.Error(w, "API key missing", http.StatusBadRequest)
 			return
 		}
 
-		// Step 2: Create Redis key
-		key := "rate_limit:" + apiKey
+		// Identify which endpoint the user is accessing
+		endpoint := r.URL.Path
 
-		// Step 3: Increment request count in Redis
+		// determine request limit for this user
+		limit, exists := userPlans[apiKey]
+		if !exists {
+			limit = requestLimit
+		}
+
+		// Check if endpoint has its own limit
+		endpointLimit, endpointExists := endpointLimits[endpoint]
+		if endpointExists {
+			limit = endpointLimit
+		}
+
+		// Create Redis key (user + endpoint)
+		key := "rate_limit:" + apiKey + ":" + endpoint
+
+		// Increment request count
 		count, err := rdb.Incr(ctx, key).Result()
 		if err != nil {
 			http.Error(w, "Redis error", http.StatusInternalServerError)
 			return
 		}
 
-		// Step 4: Set TTL for 60 seconds on first request
+		// Set expiry on first request
 		if count == 1 {
 			rdb.Expire(ctx, key, 60*time.Second)
 		}
 
-		// Step 5: Block if more than 5 requests
+		// Remaining requests
+		remaining := limit - count
+
+		// Send rate limit headers
+		w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limit))
+		w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
+
+		// Get reset time
+		ttl, err := rdb.TTL(ctx, key).Result()
+		if err == nil {
+			w.Header().Set("X-RateLimit-Reset", fmt.Sprintf("%d", int(ttl.Seconds())))
+		}
+
+		// Block if limit exceeded
 		if count > limit {
 			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
 
-		// Step 6: Allow request to reach actual handler
+		// Allow request
 		next(w, r)
 	}
 }
@@ -86,7 +111,6 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 // }
 // -------------------------------------------------------------------
 
-// -------------------------------------------------------------------
 // ACTUAL API HANDLER (NO RATE LIMIT LOGIC HERE)
 // Only business logic should be here
 // -------------------------------------------------------------------
@@ -101,11 +125,17 @@ func ordersHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Orders endpoint accessed")
 }
 
+// Login endpoint - Used to demonstrate stricter rate limiting for sensitive APIs
+func loginHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Login endpoint accessed")
+}
+
 func main() {
 
 	// Attach middleware BEFORE handler
 	http.HandleFunc("/test", rateLimitMiddleware(testHandler))
 	http.HandleFunc("/orders", rateLimitMiddleware(ordersHandler))
+	http.HandleFunc("/login", rateLimitMiddleware(loginHandler))
 
 	// Old way (no error handling)
 	// http.ListenAndServe(":8080", nil)
