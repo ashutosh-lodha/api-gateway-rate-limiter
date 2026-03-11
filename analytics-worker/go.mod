@@ -1,4 +1,4 @@
-module rate-limiter-api
+module analytics-worker
 
 go 1.25.0
 

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>API Gateway Analytics</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+body{
+    margin:0;
+    font-family:system-ui, Arial;
+    background:#0f172a;
+    color:white;
+}
+
+.header{
+    padding:25px;
+    font-size:28px;
+    font-weight:bold;
+    text-align:center;
+    background:#020617;
+    border-bottom:1px solid #1e293b;
+}
+
+.grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:30px;
+    padding:30px;
+}
+
+.card{
+    background:#020617;
+    border-radius:10px;
+    padding:25px;
+    box-shadow:0 0 20px rgba(0,0,0,0.4);
+}
+
+.card h2{
+    margin-top:0;
+    margin-bottom:20px;
+    font-size:20px;
+}
+
+canvas{
+    width:100%;
+    height:300px;
+}
+
+.footer{
+    text-align:center;
+    padding:15px;
+    font-size:13px;
+    color:#94a3b8;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="header">
+API Gateway Analytics Dashboard
+</div>
+
+<div class="grid">
+
+<div class="card">
+<h2>Top Users</h2>
+<canvas id="usersChart"></canvas>
+</div>
+
+<div class="card">
+<h2>Top Endpoints</h2>
+<canvas id="endpointsChart"></canvas>
+</div>
+
+<div class="card">
+<h2>Blocked Requests</h2>
+<canvas id="blockedChart"></canvas>
+</div>
+
+<div class="card">
+<h2>System Info</h2>
+<p>Gateway Port: 8080</p>
+<p>Redis Stream: request_logs_stream</p>
+<p>Analytics DB: MySQL</p>
+<p>Auto Refresh: 5 seconds</p>
+</div>
+
+</div>
+
+<script>
+
+let usersChart
+let endpointsChart
+let blockedChart
+
+async function fetchData(url){
+    const res = await fetch(url)
+    return res.json()
+}
+
+async function loadCharts(){
+
+    const users = await fetchData("http://localhost:8080/analytics/top-users")
+    const endpoints = await fetchData("http://localhost:8080/analytics/top-endpoints")
+    const blocked = await fetchData("http://localhost:8080/analytics/blocked-requests")
+
+    const userLabels = users.map(u => u.api_key)
+    const userData = users.map(u => u.total_requests)
+
+    const endpointLabels = endpoints.map(e => e.endpoint)
+    const endpointData = endpoints.map(e => e.total_requests)
+
+    const blockedLabels = blocked.map(b => b.api_key)
+    const blockedData = blocked.map(b => b.blocked_requests)
+
+    if(usersChart) usersChart.destroy()
+    if(endpointsChart) endpointsChart.destroy()
+    if(blockedChart) blockedChart.destroy()
+
+    usersChart = new Chart(
+        document.getElementById("usersChart"),
+        {
+            type:"bar",
+            data:{
+                labels:userLabels,
+                datasets:[{
+                    label:"Requests",
+                    data:userData
+                }]
+            }
+        }
+    )
+
+    endpointsChart = new Chart(
+        document.getElementById("endpointsChart"),
+        {
+            type:"bar",
+            data:{
+                labels:endpointLabels,
+                datasets:[{
+                    label:"Requests",
+                    data:endpointData
+                }]
+            }
+        }
+    )
+
+    blockedChart = new Chart(
+        document.getElementById("blockedChart"),
+        {
+            type:"bar",
+            data:{
+                labels:blockedLabels,
+                datasets:[{
+                    label:"Blocked",
+                    data:blockedData
+                }]
+            }
+        }
+    )
+
+}
+
+loadCharts()
+
+setInterval(loadCharts,5000)
+
+</script>
+
+</body>
+</html>
+
