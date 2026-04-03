@@ -199,15 +199,18 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 // -------------------------------------------------------------------
 
 func testHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Request allowed by rate limiter")
+	hostname, _ := os.Hostname()
+	fmt.Fprintf(w, "Test endpoint accessed | handled by: %s", hostname)
 }
 
 func ordersHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Orders endpoint accessed")
+	hostname, _ := os.Hostname()
+	fmt.Fprintf(w, "Orders endpoint accessed | handled by: %s", hostname)
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Login endpoint accessed")
+	hostname, _ := os.Hostname()
+	fmt.Fprintf(w, "Login endpoint accessed | handled by: %s", hostname)
 }
 
 // Health check endpoint (used in production systems)
