@@ -1,0 +1,59 @@
+
+services:
+
+  redis:
+    image: redis
+    container_name: redis
+    networks:
+      - rate-limiter-project-network
+
+  mysql:
+    image: mysql:8
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: api_gateway_analytics
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d
+    networks:
+      - rate-limiter-project-network
+
+  gateway:
+    build: ./rate-limiter-api
+    container_name: gateway
+    ports:
+      - "8080:8080"
+    environment:
+      DB_USER: root
+      DB_PASS: rootpassword
+      DB_HOST: mysql:3306
+      DB_NAME: api_gateway_analytics
+      REDIS_ADDR: redis:6379
+    depends_on:
+      - redis
+      - mysql
+    networks:
+      - rate-limiter-project-network
+
+  worker:
+    build: ./analytics-worker
+    container_name: worker
+    environment:
+      DB_USER: root
+      DB_PASS: rootpassword
+      DB_HOST: mysql:3306
+      DB_NAME: api_gateway_analytics
+      REDIS_ADDR: redis:6379
+    depends_on:
+      - redis
+      - mysql
+    networks:
+      - rate-limiter-project-network
+
+networks:
+  rate-limiter-project-network:
+    driver: bridge
+
+volumes:
+  mysql-data:

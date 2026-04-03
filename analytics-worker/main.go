@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
@@ -12,7 +13,7 @@ import (
 var ctx = context.Background()
 
 var rdb = redis.NewClient(&redis.Options{
-	Addr: "localhost:6379",
+	Addr: os.Getenv("REDIS_ADDR"),
 })
 
 var streamName = "request_logs_stream"
@@ -22,12 +23,17 @@ func main() {
 	fmt.Println("Worker started. Listening to Redis stream...")
 
 	// MySQL configuration
+	dbUser := os.Getenv("DB_USER")
+	dbPass := os.Getenv("DB_PASS")
+	dbHost := os.Getenv("DB_HOST")
+	dbName := os.Getenv("DB_NAME")
+
 	cfg := mysql.Config{
-		User:                 "root",
-		Passwd:               "rootpassword",
+		User:                 dbUser,
+		Passwd:               dbPass,
 		Net:                  "tcp",
-		Addr:                 "127.0.0.1:3306",
-		DBName:               "api_gateway_analytics",
+		Addr:                 dbHost,
+		DBName:               dbName,
 		AllowNativePasswords: true,
 	}
 

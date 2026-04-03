@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -18,9 +19,7 @@ import (
 
 var ctx = context.Background()
 
-var rdb = redis.NewClient(&redis.Options{
-	Addr: "localhost:6379",
-})
+var rdb *redis.Client
 
 // -------------------------------------------------------------------
 // MYSQL CONNECTION
@@ -39,11 +38,6 @@ var requestLimit int64 = 5
 var endpointLimits = map[string]int64{
 	"/login":  3,
 	"/orders": 10,
-}
-
-var userPlans = map[string]int64{
-	"user123": 5,
-	"proUser": 20,
 }
 
 // -------------------------------------------------------------------
@@ -67,6 +61,26 @@ func enableCORS(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // -------------------------------------------------------------------
+// USER LIMIT FETCHER BASED ON FREE/PRO PLAN
+// -------------------------------------------------------------------
+
+func getUserLimit(apiKey string) int64 {
+
+	var limit int64
+
+	query := `SELECT request_limit FROM api_keys WHERE api_key = ?`
+
+	err := db.QueryRow(query, apiKey).Scan(&limit)
+
+	if err != nil {
+		// fallback if key not found
+		return requestLimit
+	}
+
+	return limit
+}
+
+// -------------------------------------------------------------------
 // RATE LIMITING MIDDLEWARE
 // -------------------------------------------------------------------
 
@@ -83,33 +97,72 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		endpoint := r.URL.Path
 
-		limit, exists := userPlans[apiKey]
-		if !exists {
-			limit = requestLimit
-		}
+		limit := getUserLimit(apiKey)
 
 		if endpointLimit, ok := endpointLimits[endpoint]; ok {
-			limit = endpointLimit
+			if endpointLimit < limit {
+				limit = endpointLimit
+			}
 		}
 
 		key := "rate_limit:" + apiKey + ":" + endpoint
 
-		count, err := rdb.Incr(ctx, key).Result()
+		// Use Redis INCR with expiration for atomicity
+		/*
+			count, err := rdb.Incr(ctx, key).Result()
+			if err != nil {
+				http.Error(w, "Redis error", http.StatusInternalServerError)
+				return
+			}
+
+			if count == 1 {
+				rdb.Expire(ctx, key, 60*time.Second)
+			}
+		*/
+
+		//---------------------------------------------------------------------------------
+		// Instead we will use sliding window approach with sorted sets for better accuracy
+		now := time.Now().Unix()
+
+		window := int64(60) // 60 seconds window
+
+		// Remove old requests
+		rdb.ZRemRangeByScore(ctx, key, "0", fmt.Sprintf("%d", now-window))
+
+		// Add current request
+		rdb.ZAdd(ctx, key, redis.Z{
+			Score:  float64(now),
+			Member: fmt.Sprintf("%d", now),
+		})
+
+		// Count requests in window
+		count, err := rdb.ZCard(ctx, key).Result()
 		if err != nil {
 			http.Error(w, "Redis error", http.StatusInternalServerError)
 			return
 		}
 
-		if count == 1 {
-			rdb.Expire(ctx, key, 60*time.Second)
-		}
+		// Set expiry (optional cleanup)
+		rdb.Expire(ctx, key, time.Duration(window)*time.Second)
+		//---------------------------------------------------------------------------------
 
 		remaining := limit - count
+		if remaining < 0 {
+			remaining = 0
+		}
 
 		status := "allowed"
 		if count > limit {
 			status = "blocked"
 		}
+
+		fmt.Println("Request:",
+			"API Key:", apiKey,
+			"Endpoint:", endpoint,
+			"Count:", count,
+			"Limit:", limit,
+			"Status:", status,
+		)
 
 		w.Header().Set("X-RateLimit-Limit", fmt.Sprintf("%d", limit))
 		w.Header().Set("X-RateLimit-Remaining", fmt.Sprintf("%d", remaining))
@@ -157,6 +210,12 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Login endpoint accessed")
 }
 
+// Health check endpoint (used in production systems)
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, "OK")
+}
+
 // -------------------------------------------------------------------
 // ANALYTICS HANDLERS
 // -------------------------------------------------------------------
@@ -189,7 +248,10 @@ func topUsersHandler(w http.ResponseWriter, r *http.Request) {
 
 		var r Result
 
-		rows.Scan(&r.APIKey, &r.TotalRequests)
+		err := rows.Scan(&r.APIKey, &r.TotalRequests)
+		if err != nil {
+			continue
+		}
 
 		results = append(results, r)
 	}
@@ -228,7 +290,10 @@ func topEndpointsHandler(w http.ResponseWriter, r *http.Request) {
 
 		var r Result
 
-		rows.Scan(&r.Endpoint, &r.TotalRequests)
+		err := rows.Scan(&r.Endpoint, &r.TotalRequests)
+		if err != nil {
+			continue
+		}
 
 		results = append(results, r)
 	}
@@ -267,7 +332,10 @@ func blockedRequestsHandler(w http.ResponseWriter, r *http.Request) {
 
 		var r Result
 
-		rows.Scan(&r.APIKey, &r.BlockedRequests)
+		err := rows.Scan(&r.APIKey, &r.BlockedRequests)
+		if err != nil {
+			continue
+		}
 
 		results = append(results, r)
 	}
@@ -275,6 +343,70 @@ func blockedRequestsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	json.NewEncoder(w).Encode(results)
+}
+
+// Initialize MySQL connection
+func initDB() *sql.DB {
+
+	dbUser := os.Getenv("DB_USER")
+	dbPass := os.Getenv("DB_PASS")
+	dbHost := os.Getenv("DB_HOST")
+	dbName := os.Getenv("DB_NAME")
+
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s", dbUser, dbPass, dbHost, dbName)
+
+	/*
+		db, err := sql.Open("mysql", dsn)
+		if err != nil {
+			panic(err)
+		}
+
+		err = db.Ping()
+		if err != nil {
+			panic("Database connection failed")
+		}
+
+		fmt.Println("MySQL connected")
+
+		return db
+	*/
+	var db *sql.DB
+	var err error
+
+	// Retry loop (important)
+	for i := 1; i <= 10; i++ {
+
+		db, err = sql.Open("mysql", dsn)
+		if err == nil {
+			err = db.Ping()
+			if err == nil {
+				fmt.Println("MySQL connected")
+				return db
+			}
+		}
+
+		fmt.Println("Waiting for MySQL... attempt", i)
+		time.Sleep(3 * time.Second)
+	}
+
+	panic("Database connection failed after retries")
+}
+
+// Initialize Redis connection
+func initRedis() *redis.Client {
+
+	client := redis.NewClient(&redis.Options{
+		Addr: os.Getenv("REDIS_ADDR"),
+	})
+
+	_, err := client.Ping(ctx).Result()
+	if err != nil {
+		panic("Redis connection failed")
+	}
+
+	fmt.Println("Redis connected")
+
+	return client
 }
 
 // -------------------------------------------------------------------
@@ -285,11 +417,8 @@ func main() {
 
 	var err error
 
-	db, err = sql.Open("mysql", "root:rootpassword@tcp(127.0.0.1:3306)/api_gateway_analytics")
-
-	if err != nil {
-		panic(err)
-	}
+	db = initDB()
+	rdb = initRedis()
 
 	fmt.Println("Gateway started on port 8080")
 
@@ -300,6 +429,8 @@ func main() {
 	http.HandleFunc("/analytics/top-users", enableCORS(topUsersHandler))
 	http.HandleFunc("/analytics/top-endpoints", enableCORS(topEndpointsHandler))
 	http.HandleFunc("/analytics/blocked-requests", enableCORS(blockedRequestsHandler))
+
+	http.HandleFunc("/health", enableCORS(healthHandler))
 
 	err = http.ListenAndServe(":8080", nil)
 
