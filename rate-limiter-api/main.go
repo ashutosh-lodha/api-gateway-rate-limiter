@@ -10,6 +10,8 @@ import (
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -39,6 +41,20 @@ var endpointLimits = map[string]int64{
 	"/login":  3,
 	"/orders": 10,
 }
+
+var totalRequests = prometheus.NewCounter(
+	prometheus.CounterOpts{
+		Name: "http_requests_total",
+		Help: "Total number of requests",
+	},
+)
+
+var rateLimitedRequests = prometheus.NewCounter(
+	prometheus.CounterOpts{
+		Name: "rate_limited_requests_total",
+		Help: "Total number of rate limited requests",
+	},
+)
 
 // -------------------------------------------------------------------
 // CORS MIDDLEWARE
@@ -89,6 +105,7 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		apiKey := r.Header.Get("x-api-key")
+		totalRequests.Inc()
 
 		if apiKey == "" {
 			http.Error(w, "API key missing", http.StatusBadRequest)
@@ -186,6 +203,7 @@ func rateLimitMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}).Result()
 
 		if count > limit {
+			rateLimitedRequests.Inc()
 			http.Error(w, "Rate limit exceeded", http.StatusTooManyRequests)
 			return
 		}
@@ -420,10 +438,15 @@ func main() {
 
 	var err error
 
+	prometheus.MustRegister(totalRequests)
+	prometheus.MustRegister(rateLimitedRequests)
+
 	db = initDB()
 	rdb = initRedis()
 
 	fmt.Println("Gateway started on port 8080")
+
+	http.Handle("/metrics", promhttp.Handler())
 
 	http.HandleFunc("/test", enableCORS(rateLimitMiddleware(testHandler)))
 	http.HandleFunc("/orders", enableCORS(rateLimitMiddleware(ordersHandler)))
@@ -432,6 +455,9 @@ func main() {
 	http.HandleFunc("/analytics/top-users", enableCORS(topUsersHandler))
 	http.HandleFunc("/analytics/top-endpoints", enableCORS(topEndpointsHandler))
 	http.HandleFunc("/analytics/blocked-requests", enableCORS(blockedRequestsHandler))
+
+	fs := http.FileServer(http.Dir("./dashboard"))
+	http.Handle("/dashboard/", http.StripPrefix("/dashboard/", fs))
 
 	http.HandleFunc("/health", enableCORS(healthHandler))
 

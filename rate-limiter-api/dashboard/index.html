@@ -133,9 +133,9 @@ async function fetchData(url){
 
 async function loadDashboard(){
 
-    const users = await fetchData("http://localhost:8080/analytics/top-users")
-    const endpoints = await fetchData("http://localhost:8080/analytics/top-endpoints")
-    const blocked = await fetchData("http://localhost:8080/analytics/blocked-requests")
+    const users = await fetchData("/analytics/top-users")
+    const endpoints = await fetchData("/analytics/top-endpoints")
+    const blocked = await fetchData("/analytics/blocked-requests")
 
     // KPI calculations
     let totalRequests = users.reduce((sum,u)=>sum+u.total_requests,0)
