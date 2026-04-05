@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: worker
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: worker
+
+  template:
+    metadata:
+      labels:
+        app: worker
+
+    spec:
+      containers:
+      - name: worker
+        image: rate-limiter-worker
+        imagePullPolicy: Never
+
+        env:
+        - name: DB_USER
+          value: "root"
+        - name: DB_PASS
+          value: "rootpassword"
+        - name: DB_HOST
+          value: "mysql:3306"
+        - name: DB_NAME
+          value: "api_gateway_analytics"
+        - name: REDIS_ADDR
+          value: "redis:6379"

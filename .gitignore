@@ -1,0 +1,7 @@
+setup-notes.docx
+node_modules/
+.env
+.DS_Store
+.exe
+.out
+.log
