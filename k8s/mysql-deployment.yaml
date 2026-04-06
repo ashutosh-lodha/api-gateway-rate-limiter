@@ -26,7 +26,10 @@ spec:
 
         env:
         - name: MYSQL_ROOT_PASSWORD
-          value: "rootpassword"
+          valueFrom:
+            secretKeyRef:
+              name: gateway-secret
+              key: DB_PASS
 
         - name: MYSQL_DATABASE
           value: "api_gateway_analytics"

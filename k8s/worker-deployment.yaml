@@ -24,12 +24,31 @@ spec:
 
         env:
         - name: DB_USER
-          value: "root"
+          valueFrom:
+            secretKeyRef:
+              name: gateway-secret
+              key: DB_USER
+
         - name: DB_PASS
-          value: "rootpassword"
+          valueFrom:
+            secretKeyRef:
+              name: gateway-secret
+              key: DB_PASS
+
         - name: DB_HOST
-          value: "mysql:3306"
+          valueFrom:
+            configMapKeyRef:
+              name: gateway-config
+              key: DB_HOST
+
         - name: DB_NAME
-          value: "api_gateway_analytics"
+          valueFrom:
+            configMapKeyRef:
+              name: gateway-config
+              key: DB_NAME
+
         - name: REDIS_ADDR
-          value: "redis:6379"
+          valueFrom:
+            configMapKeyRef:
+              name: gateway-config
+              key: REDIS_ADDR
