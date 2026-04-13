@@ -3,6 +3,7 @@ kind: Deployment
 
 metadata:
   name: worker
+  namespace: rate-limiter
 
 spec:
   replicas: 1
