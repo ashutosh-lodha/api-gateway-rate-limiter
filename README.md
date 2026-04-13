@@ -59,8 +59,6 @@ git version 2.40.x
 
 ## ⚡ Quick Start (Choose One)
 
-## ⚡ Quick Start (Choose One)
-
 ### Option 1: Docker Compose (⭐ EASIEST - 3 minutes)
 
 Perfect for development and testing locally without Kubernetes.
@@ -202,6 +200,7 @@ kubectl port-forward -n rate-limiter svc/gateway-service 8080:8080
 ```bash
 kubectl port-forward -n rate-limiter svc/grafana-service 3000:3000
 ```
+![Grafana dashboard Screenshot](image-2.png)
 
 **Terminal 3 - Prometheus Metrics:**
 ```bash
@@ -324,17 +323,17 @@ Rate limited             Log to Redis Stream
 ### Kubernetes Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│         Kubernetes Cluster (Minikube)           │
-│  Namespace: rate-limiter                        │
-├─────────────────────────────────────────────────┤
-│                                                 │
+┌────────────────────────────────────────────────┐
+│         Kubernetes Cluster (Minikube)          │
+│  Namespace: rate-limiter                       │
+├────────────────────────────────────────────────┤
+│                                                │
 │  ┌──────────────────────────────────────┐      │
 │  │  Gateway Service (NodePort:30007)    │      │
 │  │  ├─ Pod 1 (Gateway)                  │      │
 │  │  └─ Pod 2+ (via HPA scaling)         │      │
 │  └──────────────────────────────────────┘      │
-│           ↓                ↓                    │
+│           ↓                ↓                   │
 │  ┌──────────────┐  ┌──────────────────┐        │
 │  │    Redis     │  │  MySQL           │        │
 │  │  (Streams)   │  │  (Analytics DB)  │        │
@@ -350,8 +349,8 @@ Rate limited             Log to Redis Stream
 │  │  ├─ Prometheus (Scrapes metrics)     │      │
 │  │  └─ Grafana (Visualizes)             │      │
 │  └──────────────────────────────────────┘      │
-│                                                 │
-└─────────────────────────────────────────────────┘
+│                                                │
+└────────────────────────────────────────────────┘
 ```
 
 ---
@@ -722,9 +721,7 @@ docker system prune                                # Clean up Docker
 
 ---
 
-## 📞 Support
-
-If you encounter issues:
+## If you encounter issues:
 
 1. **Check logs first:** `kubectl logs -n rate-limiter -f <pod-name>`
 2. **Check pod status:** `kubectl describe pod -n rate-limiter <pod-name>`
