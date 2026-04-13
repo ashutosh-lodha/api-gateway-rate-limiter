@@ -3,6 +3,7 @@ kind: Service
 
 metadata:
   name: gateway-service
+  namespace: rate-limiter
 
 spec:
   type: NodePort

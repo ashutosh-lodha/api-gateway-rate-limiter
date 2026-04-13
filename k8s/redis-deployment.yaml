@@ -3,6 +3,7 @@ kind: Deployment
 
 metadata:
   name: redis
+  namespace: rate-limiter
 
 spec:
   replicas: 1
@@ -28,6 +29,7 @@ kind: Service
 
 metadata:
   name: redis
+  namespace: rate-limiter
 
 spec:
   selector:

@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: gateway-deployment
+  namespace: rate-limiter
 spec:
   replicas: 1
   selector:
@@ -26,11 +27,19 @@ spec:
         - configMapRef:
             name: gateway-config
 
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 5
+          failureThreshold: 20
+
         readinessProbe:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 5
 
         livenessProbe:

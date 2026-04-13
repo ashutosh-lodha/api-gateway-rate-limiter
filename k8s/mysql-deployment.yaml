@@ -3,6 +3,7 @@ kind: Deployment
 
 metadata:
   name: mysql
+  namespace: rate-limiter
 
 spec:
   replicas: 1
@@ -23,6 +24,16 @@ spec:
 
         ports:
         - containerPort: 3306
+
+        startupProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - mysqladmin ping -u root -p${MYSQL_ROOT_PASSWORD}
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          failureThreshold: 20
 
         env:
         - name: MYSQL_ROOT_PASSWORD
@@ -49,6 +60,7 @@ kind: Service
 
 metadata:
   name: mysql
+  namespace: rate-limiter
 
 spec:
   selector:
