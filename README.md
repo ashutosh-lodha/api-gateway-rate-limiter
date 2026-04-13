@@ -730,11 +730,3 @@ docker system prune                                # Clean up Docker
 5. **Check Docker images:** `docker images | grep rate-limiter`
 
 ---
-
-## 📄 License
-
-MIT License - Feel free to use and modify
-
----
-
-**Happy Coding! 🚀**
