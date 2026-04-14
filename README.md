@@ -59,7 +59,7 @@ git version 2.40.x
 
 ## ⚡ Quick Start (Choose One)
 
-### Option 1: Docker Compose (⭐ EASIEST - 3 minutes)
+### Option 1: Docker Compose 
 
 Perfect for development and testing locally without Kubernetes.
 
@@ -97,7 +97,7 @@ docker compose up --build
 
 ---
 
-### Option 2: Kubernetes + Minikube (⭐ RECOMMENDED - Full production setup)
+### Option 2: Kubernetes + Minikube (RECOMMENDED - Full production setup)
 
 Complete setup with auto-scaling, monitoring, and proper namespace isolation.
 
@@ -141,7 +141,7 @@ docker images | grep rate-limiter
 kubectl create namespace rate-limiter
 ```
 
-⚠️ **IMPORTANT:** All resources MUST be in `rate-limiter` namespace, not `default`
+**IMPORTANT:** All resources MUST be in `rate-limiter` namespace, not `default`
 
 #### Step 5: Create Secrets for Database
 
@@ -185,7 +185,7 @@ kubectl get pods -n rate-limiter -w
 # Press Ctrl+C to exit watch mode
 ```
 
-**⏰ First startup takes 1-2 minutes (MySQL initializing)**
+** First startup takes 1-2 minutes (MySQL initializing)**
 
 #### Step 8: Set Up Port Forwarding
 
@@ -220,7 +220,7 @@ Open in browser:
 | **Prometheus** | http://localhost:9090 | Prometheus UI |
 
 ---
-## 🧪 Testing the API
+## Testing the API
 
 ### Generate API Key
 
@@ -310,9 +310,9 @@ API Gateway (Go) - Rate Limiting (Redis)
 Request allowed? → YES → Forward to endpoint
     ↓                          ↓
     NO                    Process request
-    ↓                        ↓
+    ↓                          ↓
 Rate limited             Log to Redis Stream
-(408)                         ↓
+                               ↓
                         Worker picks up logs
                                ↓
                         Store in MySQL
@@ -639,23 +639,6 @@ Response: JSON list of blocked requests
 * ✅ Proper namespace isolation (rate-limiter)
 * ✅ Fixed DB_HOST configuration
 * ✅ Extended startup probes for MySQL initialization
-
----
-
-## 🚀 Deployment Checklist
-
-Before going to production:
-
-- [ ] Database credentials in Kubernetes Secrets, not ConfigMap
-- [ ] Resource requests/limits set for HPA
-- [ ] Liveness and readiness probes configured
-- [ ] All pods in correct namespace (`rate-limiter`)
-- [ ] Prometheus and Grafana running
-- [ ] Test data generated and visible in dashboard
-- [ ] Rate limiting tested and working
-- [ ] Auto-scaling tested under load
-- [ ] All services accessible via port-forwarding
-- [ ] Logs checked for errors: `kubectl logs -f -n rate-limiter <pod>`
 
 ---
 
