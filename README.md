@@ -200,7 +200,6 @@ kubectl port-forward -n rate-limiter svc/gateway-service 8080:8080
 ```bash
 kubectl port-forward -n rate-limiter svc/grafana-service 3000:3000
 ```
-![Grafana dashboard Screenshot](image-2.png)
 
 **Terminal 3 - Prometheus Metrics:**
 ```bash
@@ -419,6 +418,7 @@ Dashboards visualize:
 - Default username: `admin`
 - Default password: `admin`
 
+![Grafana dashboard Screenshot](image-2.png)
 ---
 
 ## 📈 Auto-Scaling (HPA)
@@ -619,9 +619,6 @@ Response: JSON list of blocked requests
 
 ---
 
-## 📊 Monitoring
----
-
 ## Features Implemented
 
 * ✅ Sliding window rate limiting (Redis)
@@ -677,10 +674,9 @@ docker system prune                                # Clean up Docker
 
 ### Fixed Issues:
 1. **CrashLoopBackOff**: Extended startup probe timeouts and added failureThreshold
-2. **Database Connection**: Fixed DB_HOST from `mysql:3306` to `mysql`
-3. **Namespace Issues**: All resources now correctly in `rate-limiter` namespace
-4. **Service Discovery**: Added `namespace: rate-limiter` to all service manifests
-5. **MySQL Initialization**: Added startup probe to MySQL container
+2. **Namespace Issues**: All resources now correctly in `rate-limiter` namespace
+3. **Service Discovery**: Added `namespace: rate-limiter` to all service manifests
+
 
 ### Key Changes Made:
 - gateway-deployment.yaml: Extended startupProbe (60s, failureThreshold: 20)
